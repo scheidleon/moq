@@ -20,6 +20,7 @@ pub struct Server {
 	subscribe: Option<origin::Producer>,
 	stats: stats::Session,
 	versions: Versions,
+	no_probe: bool,
 }
 
 impl Server {
@@ -65,6 +66,16 @@ impl Server {
 		self
 	}
 
+	/// Take part in moq-lite bandwidth probing. On by default.
+	///
+	/// See [`Client::with_probe`](crate::Client::with_probe). Turned off for a
+	/// server, no client opens a PROBE stream to it, whatever the client's own
+	/// setting.
+	pub fn with_probe(mut self, enabled: bool) -> Self {
+		self.no_probe = !enabled;
+		self
+	}
+
 	/// The configured origin pair, each tagged with the stats context so the
 	/// model attributes reads (egress) and writes (ingress) for this session.
 	/// One shared context across both halves keeps presence and viewer counts
@@ -93,12 +104,16 @@ impl Server {
 	{
 		let (publish, subscribe) = self.stat_tagged_origins();
 
-		// We report what the transport actually measures; a server never
-		// advertises a request Path or Role, and only the dialing side prices a
-		// link. Versions without a Setup Stream have nothing to advertise.
+		// We report what the transport actually measures, unless probing is off;
+		// a server never advertises a request Path or Role, and only the dialing
+		// side prices a link. Versions without a Setup Stream have nothing to
+		// advertise.
 		let our_setup = if version.has_setup_stream() {
 			lite::Setup {
-				probe: lite::ProbeLevel::detect(&session),
+				probe: match self.no_probe {
+					true => lite::ProbeLevel::None,
+					false => lite::ProbeLevel::detect(&session),
+				},
 				path: None,
 				role: None,
 				cost: None,
@@ -119,6 +134,7 @@ impl Server {
 			version,
 			our_setup,
 			peer_setup: client_setup,
+			probe: !self.no_probe,
 		})?;
 
 		Ok(Session::new(
@@ -615,6 +631,7 @@ where
 						version: v,
 						our_setup: lite::Setup::default(),
 						peer_setup: None,
+						probe: !server.no_probe,
 					})?;
 					(
 						start.recv_bandwidth,

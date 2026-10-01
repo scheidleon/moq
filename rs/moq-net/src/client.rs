@@ -19,6 +19,7 @@ pub struct Client {
 	setup_path: Option<String>,
 	cost: Option<u64>,
 	peer_hop: Option<crate::Hop>,
+	no_probe: bool,
 }
 
 impl Client {
@@ -125,6 +126,19 @@ impl Client {
 		self
 	}
 
+	/// Take part in moq-lite bandwidth probing. On by default.
+	///
+	/// Each side opens a PROBE stream and the other reports its send-rate estimate
+	/// and RTT on it whenever they move, which keeps an otherwise idle session
+	/// sending every few seconds. Turned off, we advertise no probe capability in
+	/// SETUP, so the peer opens no PROBE stream, and open none ourselves, so
+	/// [`Session::recv_bandwidth`] is `None`. Worth it for a battery-powered peer
+	/// that doesn't use the estimate. moq-transport has no probing.
+	pub fn with_probe(mut self, enabled: bool) -> Self {
+		self.no_probe = !enabled;
+		self
+	}
+
 	/// The origin pair a session attaches, tagged and filtered.
 	///
 	/// Reads through the publish (egress) consumer and writes through the
@@ -161,14 +175,18 @@ impl Client {
 	{
 		let (publish, subscribe) = self.origins();
 
-		// Advertise our capabilities (we report what the transport measures; we
-		// don't pad) plus the request path on URI-less transports, and the
-		// direction we intend to use so the server can reject a token that lacks
-		// the matching scope during the handshake instead of silently carrying
-		// no media. Versions without a Setup Stream have nothing to advertise.
+		// Advertise our capabilities (we report what the transport measures, unless
+		// probing is off; we don't pad) plus the request path on URI-less
+		// transports, and the direction we intend to use so the server can reject
+		// a token that lacks the matching scope during the handshake instead of
+		// silently carrying no media. Versions without a Setup Stream have nothing
+		// to advertise.
 		let our_setup = if version.has_setup_stream() {
 			lite::Setup {
-				probe: lite::ProbeLevel::detect(&session),
+				probe: match self.no_probe {
+					true => lite::ProbeLevel::None,
+					false => lite::ProbeLevel::detect(&session),
+				},
 				path: self.setup_path.clone(),
 				role: lite::Role::from_origins(self.publish.is_some(), self.subscribe.is_some()),
 				cost: self.cost,
@@ -189,6 +207,7 @@ impl Client {
 			version,
 			our_setup,
 			peer_setup: None,
+			probe: !self.no_probe,
 		})?;
 
 		Ok(Session::new(
@@ -375,6 +394,7 @@ impl Client {
 					// (pre-lite-05), which have no Setup Stream.
 					our_setup: lite::Setup::default(),
 					peer_setup: None,
+					probe: !self.no_probe,
 				})?;
 
 				(

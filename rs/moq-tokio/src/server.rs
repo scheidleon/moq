@@ -339,7 +339,10 @@ impl Server {
 			unix_allow,
 		);
 
-		let mut moq = moq_net::Server::new().with_versions(versions.clone()).with_stats(stats);
+		let mut moq = moq_net::Server::new()
+			.with_versions(versions.clone())
+			.with_probe(config.probe.unwrap_or(true))
+			.with_stats(stats);
 		if let Some(publisher) = publisher {
 			moq = moq.with_publisher(publisher);
 		}

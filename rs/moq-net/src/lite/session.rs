@@ -86,6 +86,11 @@ pub struct Config<S: crate::transport::poll::Session> {
 	/// gated on the client's path via [`accept_setup`]). Seeds the peer-setup slot so
 	/// the Setup Stream isn't expected again. `None` reads it from the wire as usual.
 	pub peer_setup: Option<Setup>,
+
+	/// Whether to open a PROBE stream for the peer's bandwidth estimate. When
+	/// false the session has no receive-bandwidth estimate. What we advertise is
+	/// `our_setup.probe`.
+	pub probe: bool,
 }
 
 /// Start a lite session.
@@ -105,19 +110,16 @@ where
 		version,
 		mut our_setup,
 		peer_setup,
+		probe,
 	} = config;
 
-	let recv_bw = bandwidth::Producer::new();
-
-	let recv_bw_consumer = match version {
-		Version::Lite01 | Version::Lite02 => None,
-		_ => Some(recv_bw.consume()),
-	};
-
+	// Without a producer the subscriber never opens a PROBE stream.
 	let recv_bw_for_sub = match version {
 		Version::Lite01 | Version::Lite02 => None,
-		_ => Some(recv_bw),
+		_ => probe.then(bandwidth::Producer::new),
 	};
+
+	let recv_bw_consumer = recv_bw_for_sub.as_ref().map(bandwidth::Producer::consume);
 
 	// Declare our Hop ID in SETUP so the peer can serve our subscriptions from a
 	// route that does not flow through us. Taken from the caller's real handles
@@ -512,6 +514,39 @@ impl<S: crate::transport::poll::Session> SendGoaway<S> {
 				}
 				SendGoawayState::Enforce(enforce) => return enforce.poll(waiter),
 			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::lite::test_transport::SinkSession;
+
+	fn has_recv_bandwidth(version: Version, probe: bool) -> bool {
+		let start = start(Config {
+			runtime: crate::time::Clock::tokio(),
+			session: SinkSession::new(Default::default()),
+			setup_stream: None,
+			publish: None,
+			subscribe: None,
+			peer_hop: None,
+			version,
+			our_setup: Setup::default(),
+			peer_setup: None,
+			probe,
+		})
+		.unwrap();
+		start.recv_bandwidth.is_some()
+	}
+
+	/// With probing off there is no estimate to fill, so the subscriber never
+	/// opens a PROBE stream.
+	#[tokio::test]
+	async fn probing_off_leaves_no_recv_bandwidth() {
+		for version in [Version::Lite03, Version::Lite05] {
+			assert!(has_recv_bandwidth(version, true), "{version:?}");
+			assert!(!has_recv_bandwidth(version, false), "{version:?}");
 		}
 	}
 }
