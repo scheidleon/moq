@@ -169,6 +169,23 @@ pub struct Config {
 	#[serde(default, rename = "__cli_timeout", skip_serializing_if = "Option::is_none")]
 	pub(crate) timeout_arg: Option<crate::cli::Duration>,
 
+	/// Take part in moq-lite bandwidth probing (`--listen-probe=false` to turn it
+	/// off). On by default.
+	///
+	/// Turned off, no client opens a PROBE stream to this server, so idle sessions
+	/// stay quiet for battery-powered clients. See [`moq_net::Server::with_probe`].
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[usage(
+		name = "listen-probe",
+		long = "listen-probe",
+		env = "MOQ_LISTEN_PROBE",
+		setting = "listen.probe",
+		default_missing = "true",
+		num_args = 0..=1,
+		require_equals = true,
+	)]
+	pub probe: Option<bool>,
+
 	/// The certificates to serve and the roots that authenticate mTLS clients
 	/// (`--listen-tls-*`).
 	#[usage(flatten)]
@@ -260,6 +277,7 @@ impl Default for Config {
 			version: Vec::new(),
 			timeout: DEFAULT_TIMEOUT,
 			timeout_arg: None,
+			probe: None,
 			tls: Default::default(),
 			preferred_v4: None,
 			preferred_v6: None,

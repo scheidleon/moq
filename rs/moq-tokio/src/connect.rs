@@ -630,6 +630,24 @@ pub struct Config {
 	)]
 	pub once: Option<bool>,
 
+	/// Take part in moq-lite bandwidth probing (`--connect-probe=false` to turn
+	/// it off). On by default.
+	///
+	/// Probing keeps an otherwise idle session sending every few seconds; turn
+	/// it off on battery-powered clients that don't use the estimate. See
+	/// [`moq_net::Client::with_probe`].
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[usage(
+		name = "connect-probe",
+		long = "connect-probe",
+		env = "MOQ_CONNECT_PROBE",
+		setting = "connect.probe",
+		default_missing = "true",
+		num_args = 0..=1,
+		require_equals = true,
+	)]
+	pub probe: Option<bool>,
+
 	/// The released `reconnect` key, which said the same thing the other way around.
 	///
 	/// Parsed only so [`deprecated`](Self::deprecated) can name [`once`](Self::once)
@@ -689,6 +707,7 @@ impl Default for Config {
 			version: Vec::new(),
 			tls: Default::default(),
 			once: None,
+			probe: None,
 			reconnect: None,
 			backoff: Default::default(),
 			goaway: Default::default(),
