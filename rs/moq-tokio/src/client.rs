@@ -135,7 +135,9 @@ impl Client {
 		let timeout = resolved.timeout;
 
 		Ok(Self {
-			moq: moq_net::Client::new().with_versions(versions.clone()),
+			moq: moq_net::Client::new()
+				.with_versions(versions.clone())
+				.with_probe(config.probe.unwrap_or(true)),
 			#[cfg(any(
 				feature = "noq",
 				feature = "iroh",
@@ -1200,6 +1202,18 @@ mod tests {
 
 		let config = Cli::config_from(["test", "--connect-once=false"]);
 		assert_eq!(config.once, Some(false));
+	}
+
+	#[test]
+	fn test_cli_probe_flag() {
+		let config = Cli::config_from(["test"]);
+		assert_eq!(config.probe, None, "unset means the default (probing)");
+
+		let config = Cli::config_from(["test", "--connect-probe=false"]);
+		assert_eq!(config.probe, Some(false));
+
+		let config: crate::connect::Config = toml::from_str("probe = false").unwrap();
+		assert_eq!(config.probe, Some(false));
 	}
 
 	#[test]

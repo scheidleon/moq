@@ -20,6 +20,9 @@ pub struct Listen {
 	#[usage(env = "MOQ_LISTEN_TIMEOUT", cli("--listen-timeout"))]
 	timeout: Option<String>,
 
+	#[usage(env = "MOQ_LISTEN_PROBE", cli("--listen-probe"))]
+	probe: Option<bool>,
+
 	#[usage(env = "MOQ_LISTEN_PREFERRED_V4", cli("--listen-preferred-v4"))]
 	preferred_v4: Option<String>,
 
@@ -138,6 +141,9 @@ pub struct Connect {
 
 	#[usage(env = "MOQ_CONNECT_ONCE", cli("--connect-once"))]
 	once: Option<bool>,
+
+	#[usage(env = "MOQ_CONNECT_PROBE", cli("--connect-probe"))]
+	probe: Option<bool>,
 
 	#[usage(flatten)]
 	tls: ConnectTls,
